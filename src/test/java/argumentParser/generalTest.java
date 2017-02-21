@@ -22,13 +22,26 @@ public class generalTest {
         String schema = "b";
         String[] args = {"-c"};
         ArgumentParser argumentParser =  new ArgumentParser(schema, args);
-        assertEquals(true, argumentParser.has('b'));
+        assertEquals(false, argumentParser.has('b'));
         assertEquals(false, argumentParser.getBoolean('b'));
         assertEquals(true, argumentParser.errorMessage().contains("c"));
     }
 
     @Test
+    public void testTryToGetUnexpectedBoolean() throws Exception {
+        String schema = "b";
+        String[] args = {"-c"};
+        ArgumentParser argumentParser =  new ArgumentParser(schema, args);
+        assertEquals(false, argumentParser.has('c'));
+        assertEquals(false, argumentParser.getBoolean('c'));
+    }
+
+    @Test
     public void testString() throws Exception {
-        assertEquals(true, true);
+        String schema = "s*";
+        String[] args = {"-s", "stringArgValue"};
+        ArgumentParser argumentParser =  new ArgumentParser(schema, args);
+        assertEquals(true, argumentParser.has('s'));
+        assertEquals(true, argumentParser.getString('s').equals("stringArgValue"));
     }
 }

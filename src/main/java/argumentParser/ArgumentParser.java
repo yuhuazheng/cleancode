@@ -1,22 +1,40 @@
 package argumentParser;
 
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Set;
-import java.util.TreeSet;
+import java.text.ParseException;
+import java.util.*;
 
 /**
  * Created by yuhuazheng on 2/19/17.
  */
 public class ArgumentParser {
 
+    private class ArgumentMarshaller {
+        private boolean booleanValue = false;
+        public void setBoolean(boolean value) {
+            booleanValue = value;
+        }
+        public boolean getBoolean() {return booleanValue;}
+    }
+    private class BooleanArgumentMarshaller extends ArgumentMarshaller {
+    }
+    private class StringArgumentMarshaler extends ArgumentMarshaller {
+    }
+    private class IntegerArgumentMarshaller extends ArgumentMarshaller {
+    }
+
     private String schema;
     private String[] args;
     private Set<Character> unexpectedArgs = new TreeSet<Character>();
-    private Map<Character, Boolean> booleanArgs = new HashMap<Character, Boolean>();
+    private Map<Character, ArgumentMarshaller> booleanArgs = new HashMap<Character, ArgumentMarshaller>();
+    private Map<Character, String> stringArgs = new HashMap<Character, String>();
+    private Set<Character> argsFound = new HashSet<Character>();
 
     private boolean valid;
-    private int numOfArgs = 0;
+    private int curArg;
+    private char errorArg = '\0';
+
+    enum ErrorCode  {OK, MISSING_STRING};
+    private ErrorCode errorCode = ErrorCode.OK;
 
     public ArgumentParser(String schema, String[] args){
         this.schema = schema;
@@ -29,7 +47,7 @@ public class ArgumentParser {
     }
 
     public int cardinality(){
-        return numOfArgs;
+        return argsFound.size();
     }
 
     private boolean parse(){
@@ -42,29 +60,56 @@ public class ArgumentParser {
 
     private void parseSchema(){
         for(String schemaElement : schema.split(",")){
-            parseSchemaElement(schemaElement);
+            if(schemaElement.length() > 0) {
+                schemaElement = schemaElement.trim();
+                parseSchemaElement(schemaElement);
+            }
         }
     }
 
-    private void parseSchemaElement(String schemaElement){
-        if(schemaElement.length() == 1){
-            parseBooleanSchemaElement(schemaElement);
+    private void parseSchemaElement(String schemaElement) {
+        char elementId = schemaElement.charAt(0);
+        String elementTail = schemaElement.substring(1);
+        validateElementId(elementId);
+        if (isBooleanSchemaElement(elementTail))
+            parseBooleanSchemaElement(elementId);
+        else if (isStringSchemaElement(elementTail))
+            parseStringSchemaElement(elementId);
+    }
+
+    private void validateElementId(Character c) {
+        if(!Character.isLetter(c)) {
+            try {
+                throw new ParseException("bad argument character", 0);
+            } catch (ParseException e) {
+                e.printStackTrace();
+            }
         }
     }
 
-    private void parseBooleanSchemaElement(String schemaElement){
-        char c = schemaElement.charAt(0);
-        if(Character.isLetter(c))
-            setBooleanArgument(c, false);
+    private boolean isBooleanSchemaElement(String elementTail) {
+        return elementTail.length() == 0;
+    }
+
+    private boolean isStringSchemaElement(String elementTail) {
+        return elementTail.equals("*");
+    }
+
+    private void parseBooleanSchemaElement(char c){
+        booleanArgs.put(c, new BooleanArgumentMarshaller());
+    }
+
+    private void parseStringSchemaElement(char c) {
+        stringArgs.put(c, "");
     }
 
     private void setBooleanArgument(Character c, boolean b){
-        booleanArgs.put(c, b);
+        booleanArgs.get(c).setBoolean(b);
     }
 
     private void parseArgs(){
-        for(String arg : args){
-            parseArg(arg);
+        for(curArg = 0; curArg < args.length; curArg++){
+            parseArg(args[curArg]);
         }
     }
 
@@ -79,27 +124,59 @@ public class ArgumentParser {
         }
     }
 
-    private void parseArgElement(Character c){
-        if(isBooleanSchema(c)){
-            numOfArgs++;
-            setBooleanArgument(c, true);
-        }
-        else{
+    private void parseArgElement(Character c) {
+        if (setArgument(c))
+            argsFound.add(c);
+        else {
             unexpectedArgs.add(c);
+            valid = false;
         }
+    }
+
+    private boolean setArgument(char c){
+        boolean set = true;
+        if(isBooleanSchema(c))
+            setBooleanArgument(c, true);
+        else if (isStringSchema(c))
+            setStringArgument(c, "");
+        else
+            set = false;
+
+        return set;
     }
 
     private boolean isBooleanSchema(Character c){
         return booleanArgs.containsKey(c);
     }
 
+    private boolean isStringSchema(Character c){
+        return stringArgs.containsKey(c);
+    }
+
+    private void setStringArgument(char c, String s){
+        curArg++;
+        try {
+            stringArgs.put(c, args[curArg]);
+        } catch (ArrayIndexOutOfBoundsException e) {
+            valid = false;
+            errorArg = c;
+            errorCode = ErrorCode.MISSING_STRING;
+        }
+    }
+
     public boolean has(Character c){
-        return booleanArgs.containsKey(c);
+        return argsFound.contains(c);
     }
 
     public boolean getBoolean(Character c){
-        return booleanArgs.get(c);
+        ArgumentMarshaller am = booleanArgs.get(c);
+        return am!=null && am.getBoolean();
     }
+
+    public String getString(char s) {
+        return stringArgs.get(s);
+    }
+
 
     public String errorMessage() {
         if(unexpectedArgs.size() > 0)
