@@ -8,25 +8,45 @@ import java.util.*;
  */
 public class ArgumentParser {
 
-    private class ArgumentMarshaller {
-        private boolean booleanValue = false;
-        public void setBoolean(boolean value) {
-            booleanValue = value;
-        }
-        public boolean getBoolean() {return booleanValue;}
+    private abstract class ArgumentMarshaller {
+
+        public abstract void set(String s);
+        public abstract Object get();
     }
+
     private class BooleanArgumentMarshaller extends ArgumentMarshaller {
+        private boolean booleanValue = false;
+
+        @Override
+        public void set(String s) {
+            booleanValue = true;
+        }
+
+        @Override
+        public Object get() {
+            return booleanValue;
+        }
     }
+
     private class StringArgumentMarshaler extends ArgumentMarshaller {
+        private String stringValue = "";
+
+        @Override
+        public void set(String s) {
+            stringValue = s;
+        }
+
+        @Override
+        public Object get() {
+            return stringValue;
+        }
     }
-    private class IntegerArgumentMarshaller extends ArgumentMarshaller {
-    }
+    //private class IntegerArgumentMarshaller extends ArgumentMarshaller {}
 
     private String schema;
     private String[] args;
     private Set<Character> unexpectedArgs = new TreeSet<Character>();
-    private Map<Character, ArgumentMarshaller> booleanArgs = new HashMap<Character, ArgumentMarshaller>();
-    private Map<Character, String> stringArgs = new HashMap<Character, String>();
+    private Map<Character, ArgumentMarshaller> marshalers = new HashMap<Character, ArgumentMarshaller>();
     private Set<Character> argsFound = new HashSet<Character>();
 
     private boolean valid;
@@ -72,9 +92,9 @@ public class ArgumentParser {
         String elementTail = schemaElement.substring(1);
         validateElementId(elementId);
         if (isBooleanSchemaElement(elementTail))
-            parseBooleanSchemaElement(elementId);
+            marshalers.put(elementId, new BooleanArgumentMarshaller());
         else if (isStringSchemaElement(elementTail))
-            parseStringSchemaElement(elementId);
+            marshalers.put(elementId, new StringArgumentMarshaler());
     }
 
     private void validateElementId(Character c) {
@@ -95,17 +115,6 @@ public class ArgumentParser {
         return elementTail.equals("*");
     }
 
-    private void parseBooleanSchemaElement(char c){
-        booleanArgs.put(c, new BooleanArgumentMarshaller());
-    }
-
-    private void parseStringSchemaElement(char c) {
-        stringArgs.put(c, "");
-    }
-
-    private void setBooleanArgument(Character c, boolean b){
-        booleanArgs.get(c).setBoolean(b);
-    }
 
     private void parseArgs(){
         for(curArg = 0; curArg < args.length; curArg++){
@@ -134,32 +143,27 @@ public class ArgumentParser {
     }
 
     private boolean setArgument(char c){
-        boolean set = true;
-        if(isBooleanSchema(c))
-            setBooleanArgument(c, true);
-        else if (isStringSchema(c))
-            setStringArgument(c, "");
+        ArgumentMarshaller m  = marshalers.get(c);
+        if(m instanceof BooleanArgumentMarshaller)
+            setBooleanArg(m);
+        else if (m instanceof StringArgumentMarshaler)
+            setStringArg(m);
         else
-            set = false;
+            return false;
 
-        return set;
+        return true;
     }
 
-    private boolean isBooleanSchema(Character c){
-        return booleanArgs.containsKey(c);
+    private void setBooleanArg(ArgumentMarshaller m){
+        m.set("true");
     }
 
-    private boolean isStringSchema(Character c){
-        return stringArgs.containsKey(c);
-    }
-
-    private void setStringArgument(char c, String s){
+    private void setStringArg(ArgumentMarshaller m){
         curArg++;
         try {
-            stringArgs.put(c, args[curArg]);
+            m.set(args[curArg]);
         } catch (ArrayIndexOutOfBoundsException e) {
             valid = false;
-            errorArg = c;
             errorCode = ErrorCode.MISSING_STRING;
         }
     }
@@ -169,12 +173,23 @@ public class ArgumentParser {
     }
 
     public boolean getBoolean(Character c){
-        ArgumentMarshaller am = booleanArgs.get(c);
-        return am!=null && am.getBoolean();
+        ArgumentMarshaller am = marshalers.get(c);
+        boolean b = false;
+        try {
+            b = am != null && (Boolean) am.get();
+        } catch (ClassCastException e) {
+            b = false;
+        }
+        return b;
     }
 
     public String getString(char s) {
-        return stringArgs.get(s);
+        ArgumentMarshaller am = marshalers.get(s);
+        try {
+            return am == null ? "" : (String) am.get();
+        } catch (ClassCastException e) {
+            return "";
+        }
     }
 
 
