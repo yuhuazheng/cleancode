@@ -8,19 +8,22 @@ import java.util.*;
  */
 public class ArgumentParser {
 
+    // TODO: separate marshaller class to its own file
     private abstract class ArgumentMarshaller {
 
-        public abstract void set(String s);
+        public abstract void set(Iterator<String> currentArgument);
         public abstract Object get();
     }
 
     private class BooleanArgumentMarshaller extends ArgumentMarshaller {
         private boolean booleanValue = false;
 
+
         @Override
-        public void set(String s) {
+        public void set(Iterator<String> currentArgument){
             booleanValue = true;
         }
+
 
         @Override
         public Object get() {
@@ -32,8 +35,8 @@ public class ArgumentParser {
         private String stringValue = "";
 
         @Override
-        public void set(String s) {
-            stringValue = s;
+        public void set(Iterator<String> currentArgument){
+            stringValue = currentArgument.next();
         }
 
         @Override
@@ -44,21 +47,22 @@ public class ArgumentParser {
     //private class IntegerArgumentMarshaller extends ArgumentMarshaller {}
 
     private String schema;
-    private String[] args;
+    private List<String> argsList;
     private Set<Character> unexpectedArgs = new TreeSet<Character>();
     private Map<Character, ArgumentMarshaller> marshalers = new HashMap<Character, ArgumentMarshaller>();
     private Set<Character> argsFound = new HashSet<Character>();
 
     private boolean valid;
-    private int curArg;
-    private char errorArg = '\0';
+    private Iterator<String> curArg;
 
+    // TODO: separate errors to its own class and file
+    private char errorArg = '\0';
     enum ErrorCode  {OK, MISSING_STRING};
     private ErrorCode errorCode = ErrorCode.OK;
 
-    public ArgumentParser(String schema, String[] args){
+    public ArgumentParser(String schema, String[] argsList){
         this.schema = schema;
-        this.args = args;
+        this.argsList = Arrays.asList(argsList);
         valid = parse();
     }
 
@@ -71,7 +75,7 @@ public class ArgumentParser {
     }
 
     private boolean parse(){
-        if(schema.length()==0 && args.length == 0)
+        if(schema.length()==0 && argsList.size() == 0)
             return true;
         parseSchema();
         parseArgs();
@@ -117,8 +121,8 @@ public class ArgumentParser {
 
 
     private void parseArgs(){
-        for(curArg = 0; curArg < args.length; curArg++){
-            parseArg(args[curArg]);
+        for(curArg = argsList.iterator(); curArg.hasNext();){
+            parseArg(curArg.next());
         }
     }
 
@@ -144,28 +148,12 @@ public class ArgumentParser {
 
     private boolean setArgument(char c){
         ArgumentMarshaller m  = marshalers.get(c);
-        if(m instanceof BooleanArgumentMarshaller)
-            setBooleanArg(m);
-        else if (m instanceof StringArgumentMarshaler)
-            setStringArg(m);
-        else
+        if (m == null)
             return false;
 
+        m.set(curArg);
+
         return true;
-    }
-
-    private void setBooleanArg(ArgumentMarshaller m){
-        m.set("true");
-    }
-
-    private void setStringArg(ArgumentMarshaller m){
-        curArg++;
-        try {
-            m.set(args[curArg]);
-        } catch (ArrayIndexOutOfBoundsException e) {
-            valid = false;
-            errorCode = ErrorCode.MISSING_STRING;
-        }
     }
 
     public boolean has(Character c){
